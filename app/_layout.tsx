@@ -1,37 +1,38 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { Stack } from "expo-router";
+import { useEffect } from "react";
+import * as Location from "expo-location";
+import * as Notification from "expo-notifications";
 
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
+const requestPermissions = async () => {
+  const { status: foregroundStatus } =
+    await Location.getForegroundPermissionsAsync();
+  if (foregroundStatus !== "granted") {
+    await Location.requestForegroundPermissionsAsync();
   }
 
+  const { status: backgroundStatus } =
+    await Location.getBackgroundPermissionsAsync();
+  if (backgroundStatus !== "granted") {
+    await Location.requestBackgroundPermissionsAsync();
+  }
+
+  const { status: notificationStatus } =
+    await Notification.getPermissionsAsync();
+  if (notificationStatus !== "granted") {
+    await Notification.requestPermissionsAsync();
+  }
+};
+
+export default function RootLayout() {
+  useEffect(() => {
+    (async () => {
+      await requestPermissions();
+    })();
+  }, []);
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-    </ThemeProvider>
+    <Stack>
+      <Stack.Screen name="index" />
+    </Stack>
   );
 }
