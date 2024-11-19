@@ -5,12 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 import AsyncStorage, {
   useAsyncStorage,
 } from "@react-native-async-storage/async-storage";
-import * as BackgroundFetch from "expo-background-fetch";
 import * as Notifications from "expo-notifications";
 
 const LOCATION_TASK_NAME = "background-location-task";
-const NOTIFICATION_TASK_NAME = "notify-if-inactive";
 const TRACKING_ENABLED_KEY = "@tracking-enabled";
+const INACTIVITY_NOTIFICATION_ID_KEY = "@inactivity-notification-id";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,7 +25,7 @@ const launchLocationTask = async () => {
     accuracy: Location.Accuracy.BestForNavigation,
     activityType: Location.ActivityType.Fitness,
     pausesUpdatesAutomatically: false,
-    timeInterval: 1000,
+    timeInterval: 2000,
     showsBackgroundLocationIndicator: true,
     foregroundService: {
       notificationTitle: "expo-taskmanager-demo",
@@ -48,54 +47,42 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
       const { locations } = data;
 
       // Store the latest location timestamp in AsyncStorage.
-      AsyncStorage.setItem(
+      await AsyncStorage.setItem(
         "@previous-location-timestamp",
         locations[0].timestamp.toString()
       );
       console.log(locations);
+
+      // Get the notification ID from AsyncStorage
+      const notificationId = await AsyncStorage.getItem(
+        INACTIVITY_NOTIFICATION_ID_KEY
+      );
+
+      // Cancel any existing scheduled inactivity notification
+      if (notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(notificationId);
+      }
+
+      // Schedule a new notification to be sent in 20 seconds
+      const newNotificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Inactivity Alert",
+          body: "You have not moved in a while...",
+        },
+        trigger: {
+          seconds: 20,
+          repeats: true,
+        },
+      });
+
+      // Store the new notification ID
+      await AsyncStorage.setItem(
+        INACTIVITY_NOTIFICATION_ID_KEY,
+        newNotificationId
+      );
     }
   }
 );
-
-// Defines the background fetch task to notify the user if inactive.
-TaskManager.defineTask(NOTIFICATION_TASK_NAME, async () => {
-  const previousTimestamp = await AsyncStorage.getItem(
-    "@previous-location-timestamp"
-  ).catch(console.error);
-
-  if (!previousTimestamp) {
-    return BackgroundFetch.BackgroundFetchResult.NoData;
-  }
-
-  const previousLocationTime = parseInt(previousTimestamp);
-  const timeSinceLastLocation = Date.now() - previousLocationTime;
-
-  if (timeSinceLastLocation > 20000) {
-    // Over 20 seconds has passed since the last location update.
-    // Schedule a notification to alert the user.
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Inactivity Alert",
-        body: "You have not moved in a while...",
-      },
-      trigger: null,
-    });
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  }
-
-  return BackgroundFetch.BackgroundFetchResult.NoData;
-});
-
-// Registers the background fetch task for inactivity notifications.
-BackgroundFetch.registerTaskAsync(NOTIFICATION_TASK_NAME, {
-  minimumInterval: 20,
-  stopOnTerminate: false,
-  startOnBoot: true,
-})
-  .then(() => {
-    console.log("BackgroundFetch task registered");
-  })
-  .catch(console.error);
 
 export default function Index() {
   const [isTracking, setIsTracking] = useState(false);
