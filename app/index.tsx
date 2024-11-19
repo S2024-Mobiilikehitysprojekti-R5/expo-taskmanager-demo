@@ -20,6 +20,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Launches the background location task with specified settings.
 const launchLocationTask = async () => {
   await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
     accuracy: Location.Accuracy.BestForNavigation,
@@ -35,6 +36,7 @@ const launchLocationTask = async () => {
   }).catch(console.error);
 };
 
+// Defines the background location task to handle location updates.
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
   LOCATION_TASK_NAME,
   async ({ data, error }) => {
@@ -45,6 +47,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
     if (data) {
       const { locations } = data;
 
+      // Store the latest location timestamp in AsyncStorage.
       AsyncStorage.setItem(
         "@previous-location-timestamp",
         locations[0].timestamp.toString()
@@ -54,6 +57,7 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
   }
 );
 
+// Defines the background fetch task to notify the user if inactive.
 TaskManager.defineTask(NOTIFICATION_TASK_NAME, async () => {
   const previousTimestamp = await AsyncStorage.getItem(
     "@previous-location-timestamp"
@@ -67,6 +71,8 @@ TaskManager.defineTask(NOTIFICATION_TASK_NAME, async () => {
   const timeSinceLastLocation = Date.now() - previousLocationTime;
 
   if (timeSinceLastLocation > 20000) {
+    // Over 20 seconds has passed since the last location update.
+    // Schedule a notification to alert the user.
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "Inactivity Alert",
@@ -80,6 +86,7 @@ TaskManager.defineTask(NOTIFICATION_TASK_NAME, async () => {
   return BackgroundFetch.BackgroundFetchResult.NoData;
 });
 
+// Registers the background fetch task for inactivity notifications.
 BackgroundFetch.registerTaskAsync(NOTIFICATION_TASK_NAME, {
   minimumInterval: 20,
   stopOnTerminate: false,
@@ -96,6 +103,8 @@ export default function Index() {
 
   useEffect(() => {
     (async () => {
+      // On component mount, check if tracking is enabled.
+      // This ensures that the tracking state is preserved across app restarts.
       const trackingEnabled = (await getItem()) === "true";
       setIsTracking(trackingEnabled);
     })();
@@ -113,6 +122,7 @@ export default function Index() {
     })();
   }, [isTracking]);
 
+  // Toggles the location tracking state.
   const toggleLocationTracking = useCallback(async () => {
     const isTaskActive =
       await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
